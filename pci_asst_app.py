@@ -15,7 +15,7 @@ from scoping_prompts import (
     asmp_exc_prompt, comp_val_prompt, roles_prompt, nextstep_prompt
 )
 
-client = OpenAI(api_key="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")
+client = OpenAI(api_key="")
 
 # File processing functions (same as original code)
 def process_image(file_path: str) -> tuple[str, str]:
@@ -69,7 +69,6 @@ def analyze_with_gpt4o(prompt: str, text: str, images: list, history=None) -> st
     )
     return response.choices[0].message.content
 
-
 # Gradio UI Components
 prompts = {
     objective_prompt: "Objective",
@@ -86,19 +85,7 @@ prompts = {
     nextstep_prompt: "Next Steps"
 }
 
-# def create_prompt_handler(prompt_text, heading, index):
-#     def handler(processed_data, progress=gr.Progress()):
-#         text, images = processed_data
-#         progress(0, desc=f"Generating {heading}...")
-#         response = analyze_with_gpt4o(prompt_text, text, images)
-#         progress(1.0)
-#         # Create a list of updates for all response boxes
-#         updates = [gr.update(visible=i == index, value=response if i == index else None) 
-#                  for i in range(len(prompts))]
-#         return updates
-#     return handler
-##NOTE
-# Modify the create_prompt_handler function
+# the prompt handler function
 def create_prompt_handler(prompt_text, heading, index):
     def handler(processed_data, reports):
         progress = gr.Progress()
@@ -296,145 +283,3 @@ with gr.Blocks(title="Document Analyzer") as app:
         if not selected_file or not uploaded_files:
             return None, None
         
-        # Find the selected file's path
-        file_path = None
-        for file in uploaded_files:
-            if os.path.basename(file.name) == selected_file:
-                file_path = file.name
-                break
-        
-        if not file_path:
-            return None, None
-        
-        # Determine file type and render accordingly
-        ext = os.path.splitext(file_path)[1].lower()
-        
-        if ext in ['.jpg', '.jpeg', '.png']:
-            return file_path, None
-        elif ext == '.pdf':
-            with open(file_path, "rb") as f:
-                pdf_data = f.read()
-            pdf_base64 = base64.b64encode(pdf_data).decode('utf-8')
-            pdf_html = f'<iframe src="data:application/pdf;base64,{pdf_base64}" width="100%" height="800px"></iframe>'
-            return None, pdf_html
-        return None, None
-
-
-    # Event handlers
-    # process_btn.click(
-    #     process_uploaded_files,
-    #     inputs=[files],
-    #     outputs=[document_data, processed_data, doc_selector, analysis_gallery, doc_chat_gallery],
-    #     show_progress=True
-    # )
-    ##NOTE
-    # Update the process_uploaded_files outputs in the click handler
-    process_btn.click(
-        process_uploaded_files,
-        inputs=[files],
-        outputs=[document_data, processed_data, doc_selector, analysis_gallery, reports_state],
-        show_progress=True
-    )
-    
-    doc_selector.change(
-        display_file,
-        inputs=[doc_selector, files],
-        outputs=[image_output, pdf_output]
-    )
-    
-    doc_chat_btn.click(
-        handle_doc_chat,
-        inputs=[doc_chat_input, doc_chatbot, doc_selector, document_data, doc_chat_histories],
-        outputs=[doc_chatbot, doc_chat_histories]
-    ).then(lambda: "", outputs=[doc_chat_input])
-
-    doc_chat_input.submit(
-        handle_doc_chat,
-        inputs=[doc_chat_input, doc_chatbot, doc_selector, document_data, doc_chat_histories],
-        outputs=[doc_chatbot, doc_chat_histories]
-    ).then(lambda: "", outputs=[doc_chat_input])
-
-    # prompt handling and main chat handling 
-    # Prompt Handling
-    # for index, (btn, (prompt, heading)) in enumerate(zip(prompt_btns, prompts.items())):
-    #     btn.click(
-    #         create_prompt_handler(prompt, heading, index),
-    #         inputs=[processed_data],
-    #         outputs=response_boxes,
-    #         show_progress=True
-    #     )
-    ##NOTE
-    # Update the click handlers
-    for index, (btn, (prompt, heading)) in enumerate(zip(prompt_btns, prompts.items())):
-        btn.click(
-            create_prompt_handler(prompt, heading, index),
-            inputs=[processed_data, reports_state],
-            outputs=response_boxes,
-            show_progress=True  # This enables the global progress bar
-        ).then(
-            lambda r: r,
-            inputs=[reports_state],
-            outputs=[reports_state],
-            show_progress=False
-        )
-    
-    # Chat Handling
-    def handle_chat(message, history, data):
-        progress = gr.Progress()  # Create a fresh instance each time
-        progress(0, "Analyzing question...")
-        text, images = data
-        
-        # Convert history to OpenAI format
-        messages = []
-        chat_prompt = f"""
-        You are an expert PCI DSS auditor.
-        The following information is extracted from several files. 
-        Each file's content is preceded by a header indicating the file type and filename.
-        For example:
-        --- Excel File: assest_inventory.xlsx ---
-        [Excel content here]
-        --- PDF File: dataflow.pdf ---
-        [PDF content here]
-        --- Image File: screenshot.jpg ---
-        Use these headers to distinguish between the documents and answer questions accordingly. 
-        Answers the user's question according to the information provided.
-        If user's question is irrelevant to the topic, 
-        politely remind user to stick to asking questions about the given documents in a PCI DSS audit context.
-        """
-        messages.append({"role": "developer", "content": chat_prompt})
-        for user, bot in history:
-            messages.append({"role": "user", "content": user})
-            messages.append({"role": "assistant", "content": bot})
-        
-        response = analyze_with_gpt4o(message, text, images, messages)
-        progress(1.0)
-        return history + [(message, response)]
-    
-    chat_btn.click(
-        handle_chat,
-        inputs=[chat_input, chat_history, processed_data],
-        outputs=[chat_history]
-        # show_progress=True
-    ).then(
-        lambda: "",
-        outputs=[chat_input]
-    )
-
-    chat_input.submit(
-        handle_chat,
-        inputs=[chat_input, chat_history, processed_data],
-        outputs=[chat_history]
-        # show_progress=True
-    ).then(
-        lambda: "",
-        outputs=[chat_input]
-    )
-    
-    chat_history.change(
-        lambda h: gr.update(value=h),
-        inputs=[chat_history],
-        outputs=[chatbot]
-    )
-
-if __name__ == "__main__":
-    app.launch() #share=True
