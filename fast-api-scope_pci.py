@@ -319,6 +319,7 @@ class FullReportResponse(BaseModel):
     id: str
     project_name: str
     qsa_name: str
+    date: str
     scope_document: dict
 
 # Add new endpoint to generate full report
@@ -326,7 +327,8 @@ class FullReportResponse(BaseModel):
 async def generate_full_report(
     session_id: str, 
     project_name: str,
-    qsa_name: str
+    qsa_name: str,
+    date:str
 ):
     try:
         session = get_session(session_id)
