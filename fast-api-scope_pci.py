@@ -34,7 +34,8 @@ app.add_middleware(
 )
 
 # Initialize OpenAI client
-client = OpenAI(api_key=os.environ.get("OPENAI_API_KEY"))
+openai_key = os.environ.get("OPENAI_API_KEY")
+client = OpenAI(api_key="sk-xxxxxxxxxxxxxxx")
 
 # Session management
 sessions: Dict[str, dict] = {}
@@ -190,8 +191,24 @@ async def upload_files(session_id: str, files: List[UploadFile] = File(...)):
             text, images = "", []
             if final_name.lower().endswith(('.png', '.jpg', '.jpeg')):
                 images.append(process_image(file_path))
+                # Update document_data for the Image
+                session.document_data[final_name] = {
+                    "original_name": original_name,
+                    "path": file_path,
+                    "text": '',
+                    "images": images,
+                    "type": "IMAGE"
+                }
             elif final_name.lower().endswith(('.xlsx', '.xls')):
                 text = process_excel(file_path)
+                # Update document_data for the Excel
+                session.document_data[final_name] = {
+                    "original_name": original_name,
+                    "path": file_path,
+                    "text": text,
+                    "images": [],
+                    "type": "EXCELSHEET"
+                }
             # PDF-specific processing    
             elif final_name.lower().endswith('.pdf'):
                 text, pdf_images = process_pdf(file_path)
@@ -227,14 +244,14 @@ async def upload_files(session_id: str, files: List[UploadFile] = File(...)):
                     except Exception as e:
                         print(f"Error processing extracted image: {str(e)}")
 
-            # Update document_data for the PDF
-            session.document_data[final_name] = {
-                "original_name": original_name,
-                "path": file_path,
-                "text": text,
-                "images": [],
-                "type": "PDF"
-            }
+                # Update document_data for the PDF
+                session.document_data[final_name] = {
+                    "original_name": original_name,
+                    "path": file_path,
+                    "text": text,
+                    "images": [],
+                    "type": "PDF"
+                }
             processed_files.append(final_name)
 
         except Exception as e:
@@ -273,13 +290,13 @@ async def generate_report_section(session_id: str, section: str):
         "Cardholder Data Environment": cde_prompt,
         "Connected Systems": connect_sys_prompt,
         "Third Parties": third_party_prompt,
-        "Out-of-Scope": oof_sys_prompt,
+        "Out-of-Scope Systems": oof_sys_prompt,
         "Data Flows": data_flow_prompt,
         "Risk Assessment": risk_asmt_prompt,
-        "Assumptions/Exclusions": asmp_exc_prompt,
-        "Compliance Validation": comp_val_prompt,
-        "Stakeholders": roles_prompt,
-        "Next Steps": nextstep_prompt
+        #"Assumptions/Exclusions": asmp_exc_prompt,
+        #"Compliance Validation": comp_val_prompt,
+        #"Stakeholders": roles_prompt,
+        #"Next Steps": nextstep_prompt
     }
     
     if section not in section_prompts:
@@ -295,6 +312,62 @@ async def generate_report_section(session_id: str, section: str):
         return {"section": section, "content": response}
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error generating section: {str(e)}")
+    
+# End point to generate entire scope document report
+# Add new Pydantic model for response structure
+class FullReportResponse(BaseModel):
+    id: str
+    project_name: str
+    qsa_name: str
+    scope_document: dict
+
+# Add new endpoint to generate full report
+@app.post("/generate_full_report", response_model=FullReportResponse)
+async def generate_full_report(
+    session_id: str, 
+    project_name: str,
+    qsa_name: str
+):
+    try:
+        session = get_session(session_id)
+    except HTTPException as e:
+        return e
+    
+    # Define all section prompts
+    section_prompts = {
+        "Objective": objective_prompt,
+        "Business Overview": business_overview_prompt,
+        "Cardholder Data Environment": cde_prompt,
+        "Connected Systems": connect_sys_prompt,
+        "Third Parties": third_party_prompt,
+        "Out-of-Scope Systems": oof_sys_prompt,
+        "Data Flows": data_flow_prompt,
+        "Risk Assessment": risk_asmt_prompt,
+        # "Assumptions/Exclusions": asmp_exc_prompt,
+        # "Compliance Validation": comp_val_prompt,
+        # "Stakeholders": roles_prompt,
+        # "Next Steps": nextstep_prompt
+    }
+
+    # Generate all sections
+    try:
+        text, images = session.processed_data
+        for section, prompt in section_prompts.items():
+            if section not in session.reports:
+                response = analyze_with_gpt4o(prompt, text, images)
+                session.reports[section] = response
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error generating report: {str(e)}")
+
+    return {
+        "id": str(uuid.uuid4()),
+        "project_name": project_name,
+        "qsa_name": qsa_name,
+        "scope_document": {
+            "id": str(uuid.uuid4()),
+            **session.reports
+        }
+    }
 
 # End point to handle chat with GPT
 # if document_id is selected (from list of processed documents), chat about the specific document
