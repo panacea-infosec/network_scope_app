@@ -35,7 +35,7 @@ app.add_middleware(
 
 # Initialize OpenAI client
 openai_key = os.environ.get("OPENAI_API_KEY")
-client = OpenAI(api_key="sk-xxxxxxxxxxxxxxx")
+client = OpenAI(api_key="sk-")
 
 # Session management
 sessions: Dict[str, dict] = {}
@@ -445,4 +445,4 @@ async def list_documents(session_id: str):
 
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run(app, host="0.0.0.0", port=8000)
+    uvicorn.run(app)#, host="0.0.0.0", port=8000

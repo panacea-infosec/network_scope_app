@@ -18,7 +18,8 @@ from scoping_prompts import (
     asmp_exc_prompt, comp_val_prompt, roles_prompt, nextstep_prompt
 )
 
-client = OpenAI(api_key=os.environ.get("OPENAI_API_KEY"))
+# client = OpenAI(api_key=os.environ.get("OPENAI_API_KEY"))
+client = OpenAI(api_key='')
 
 #---------------------------
 # File processing functions
